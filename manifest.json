@@ -1,7 +1,7 @@
 {
 	"id": "surfing",
-	"name": "Surfing",
-	"version": "0.9.14",
+	"name": "Surfing (JLD fork)",
+	"version": "0.9.14-jld1",
 	"minAppVersion": "1.4.0",
 	"description": "Surf the Net in Obsidian.",
 	"author": "Boninall & Windily-cloud",
