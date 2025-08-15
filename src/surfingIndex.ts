@@ -145,6 +145,11 @@ export default class SurfingPlugin extends Plugin {
 		this.patchProperty();
 		// this.settings.supportLivePreviewInlineUrl && this.patchInlinePreview();
 
+		// Registrar manejadores globales para enlaces dinámicos
+		this.registerGlobalLinkHandler();
+		this.registerDynamicContentObserver();
+		this.patchDataviewPlugin();
+
 		if (requireApiVersion("1.1.0") && this.settings.useWebview) {
 			this.patchCanvasNode();
 			this.patchCanvas();
@@ -1515,6 +1520,109 @@ export default class SurfingPlugin extends Plugin {
 		this.app.embedRegistry.unregisterExtension("html");
 		// @ts-expect-error
 		this.app.embedRegistry.unregisterExtension("htm");
+	}
+
+	// Delegación global de eventos para enlaces dinámicos
+	private registerGlobalLinkHandler() {
+		// Delegación de eventos global para todos los enlaces externos
+		this.registerDomEvent(document, 'click', (event: MouseEvent) => {
+			const target = event.target as HTMLElement;
+			const linkEl = target.closest('a[href^="http"], a[href^="https://"]');
+			
+			if (!linkEl) return;
+			
+			// Verificar si el enlace está dentro de una vista de Obsidian
+			const obsidianView = linkEl.closest('.workspace-leaf-content');
+			if (!obsidianView) return;
+			
+			// Verificar si es un enlace externo válido
+			const href = linkEl.getAttribute('href');
+			if (!href || !checkIfWebBrowserAvailable(href)) return;
+			
+			// Verificar si no es Ctrl/Cmd + click (que debe abrir en navegador externo)
+			if (event.ctrlKey || event.metaKey) return;
+			
+			// Prevenir comportamiento por defecto y abrir en Surfing
+			event.preventDefault();
+			event.stopPropagation();
+			
+			SurfingView.spawnWebBrowserView(this, true, { url: href });
+		}, { capture: true }); // Usar capture para interceptar antes que otros handlers
+	}
+
+	// Observador de mutaciones para contenido dinámico
+	private registerDynamicContentObserver() {
+		const observer = new MutationObserver((mutations) => {
+			mutations.forEach((mutation) => {
+				if (mutation.type === 'childList') {
+					mutation.addedNodes.forEach((node) => {
+						if (node.nodeType === Node.ELEMENT_NODE) {
+							const element = node as Element;
+							
+							// Buscar enlaces externos en el nuevo contenido
+							const externalLinks = element.querySelectorAll('a[href^="http"], a[href^="https://"]');
+							
+							externalLinks.forEach((link) => {
+								if (!link.hasAttribute('data-surfing-processed')) {
+									link.setAttribute('data-surfing-processed', 'true');
+									this.addLinkHandler(link as HTMLAnchorElement);
+								}
+							});
+						}
+					});
+				}
+			});
+		});
+		
+		// Observar cambios en todo el workspace
+		observer.observe(document.body, {
+			childList: true,
+			subtree: true
+		});
+		
+		this.register(() => observer.disconnect());
+	}
+
+	private addLinkHandler(link: HTMLAnchorElement) {
+		link.addEventListener('click', (event: MouseEvent) => {
+			if (event.ctrlKey || event.metaKey) return;
+			
+			const href = link.getAttribute('href');
+			if (href && checkIfWebBrowserAvailable(href)) {
+				event.preventDefault();
+				SurfingView.spawnWebBrowserView(this, true, { url: href });
+			}
+		});
+	}
+
+	// Hooks específicos para Dataview
+	private patchDataviewPlugin() {
+		this.app.workspace.onLayoutReady(() => {
+			const dataviewPlugin = this.app.plugins.getPlugin('dataview');
+			if (dataviewPlugin) {
+				// Observar específicamente las actualizaciones de Dataview
+				this.registerEvent(
+					this.app.workspace.on('dataview:refresh-views' as any, () => {
+						setTimeout(() => {
+							this.processDataviewLinks();
+						}, 100);
+					})
+				);
+			}
+		});
+	}
+
+	private processDataviewLinks() {
+		const dataviewElements = document.querySelectorAll('.dataview, .block-language-dataview');
+		dataviewElements.forEach((element) => {
+			const links = element.querySelectorAll('a[href^="http"], a[href^="https://"]');
+			links.forEach((link) => {
+				if (!link.hasAttribute('data-surfing-processed')) {
+					link.setAttribute('data-surfing-processed', 'true');
+					this.addLinkHandler(link as HTMLAnchorElement);
+				}
+			});
+		});
 	}
 
 	async loadSettings() {

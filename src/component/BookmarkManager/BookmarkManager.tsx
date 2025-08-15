@@ -19,7 +19,7 @@ import useStateRef from "react-usestateref";
 import { generateColor, generateTagsOptions, stringToCategory } from "./utils";
 import type { Bookmark, CategoryType } from "../../types/bookmark";
 import { ColumnsType } from "antd/es/table";
-import { CheckboxValueType } from "antd/es/checkbox/Group";
+import { CheckboxProps } from "antd";
 import { BookmarkForm } from "./BookmarkForm";
 import BookmarkImporter from "./BookmarkImporter";
 import SurfingPlugin from "src/surfingIndex";
@@ -223,7 +223,7 @@ export default function BookmarkManager(props: Props) {
 		},
 	];
 
-	const [checkedColumn, setCheckedColumn] = useState<CheckboxValueType[]>(
+	const [checkedColumn, setCheckedColumn] = useState<(string | number)[]>(
 		props.plugin.settings.bookmarkManager.defaultColumnList
 	);
 	const [columns, setColumns, columnsRef] = useStateRef(defaultColumns.filter((column) => {
@@ -264,7 +264,7 @@ export default function BookmarkManager(props: Props) {
 	}, [tagFiltered, categoryFiltered, sortedInfo]);
 
 	const CheckboxGroup = Checkbox.Group;
-	const onColumnChange = async (list: CheckboxValueType[]) => {
+	const onColumnChange = async (list: (string | number)[]) => {
 		const newColumns = defaultColumns.filter((column) => {
 			return list.includes(column.key as string) || column.key === "action";
 		});
